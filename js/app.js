@@ -113,7 +113,6 @@ function fieldClass(key) { return 'dtl-field' + (state.err[key] ? ' dtl-field--e
 function renderHeader() {
   const ev = activeEvent();
   const inEvent = inEventScreen();
-  const themeLabel = data.theme === 'circuit' ? '◐ Circuit' : '▦ Telemetry';
   return '' +
     '<header class="dtl-header">' +
       '<div class="dtl-header-left">' +
@@ -121,7 +120,7 @@ function renderHeader() {
         (inEvent ? '<span class="dtl-divider"></span><span class="dtl-ctx-driver">' + esc(ev.driver) + '</span>' : '') +
       '</div>' +
       '<div class="dtl-header-right">' +
-        '<button type="button" class="dtl-theme-btn" data-action="toggle-theme">' + themeLabel + '</button>' +
+        (inEvent ? '<span class="dtl-ctx-circuit">' + esc(ev.circuit) + '</span>' : '') +
       '</div>' +
     '</header>';
 }
@@ -273,6 +272,17 @@ function renderTires(ev) {
       '<div class="dtl-section-label">Track condition</div>' +
       chipRow('tireDraft', 'condition', COND_OPTS, 'dtl-chip--flex', 'dtl-chip-row--cond') +
 
+      '<div class="dtl-rim-card">' +
+        '<div>' +
+          '<div class="dtl-rim-title">Rim temperature</div>' +
+          '<div class="dtl-rim-sub">One reading per session</div>' +
+        '</div>' +
+        '<div class="dtl-rim-input-wrap">' +
+          '<input type="number" inputmode="decimal" step="0.1" class="dtl-rim-input' + (state.err.rimTemp ? ' dtl-rim-input--err' : '') + '" data-draft="tireDraft" name="rimTemp" value="' + esc(t.rimTemp) + '" placeholder="0">' +
+          '<span class="dtl-rim-unit">°C</span>' +
+        '</div>' +
+      '</div>' +
+
       '<div class="dtl-card">' +
         '<div class="dtl-card-head">' +
           '<span class="dtl-dot dtl-dot--cold"></span>' +
@@ -294,17 +304,6 @@ function renderTires(ev) {
         '<div class="dtl-corner-grid">' +
           cornerGrid('hot') +
           '<div class="dtl-kart-icon">' + KART_SVG + '</div>' +
-        '</div>' +
-      '</div>' +
-
-      '<div class="dtl-rim-card">' +
-        '<div>' +
-          '<div class="dtl-rim-title">Rim temperature</div>' +
-          '<div class="dtl-rim-sub">One reading per session</div>' +
-        '</div>' +
-        '<div class="dtl-rim-input-wrap">' +
-          '<input type="number" inputmode="decimal" step="0.1" class="dtl-rim-input' + (state.err.rimTemp ? ' dtl-rim-input--err' : '') + '" data-draft="tireDraft" name="rimTemp" value="' + esc(t.rimTemp) + '" placeholder="0">' +
-          '<span class="dtl-rim-unit">°C</span>' +
         '</div>' +
       '</div>' +
 
@@ -575,7 +574,6 @@ function render() {
 
 /* ============ HANDLERS: NAVIGATION ============ */
 function onLogoHome() { state.screen = 'events'; render(); }
-function onToggleTheme() { data.theme = data.theme === 'circuit' ? 'telemetry' : 'circuit'; persist(); render(); }
 function onNewEvent() { state.screen = 'master'; state.masterDraft = blankMaster(); state.err = {}; render(); }
 function onBackToEvents() { state.screen = 'events'; render(); }
 function onOpenEvent(id) { data.activeId = id; persist(); state.screen = 'tires'; render(); }
@@ -808,7 +806,6 @@ appRoot.addEventListener('click', (e) => {
   const action = btn.dataset.action;
   switch (action) {
     case 'logo-home': onLogoHome(); break;
-    case 'toggle-theme': onToggleTheme(); break;
     case 'new-event': onNewEvent(); break;
     case 'open-event': onOpenEvent(btn.dataset.id); break;
     case 'delete-event': onDeleteEvent(btn.dataset.id); break;
