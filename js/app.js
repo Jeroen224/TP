@@ -61,10 +61,15 @@ const state = {
   reviewTab: 'tires',
   editingSessionId: null,
   editingSetupId: null,
+  editReturn: 'review',
+  heldTireDraft: null,
   err: {},
 };
 
 /* ============ HELPERS ============ */
+function isBlank(v) { return !String(v == null ? '' : v).trim(); }
+function hasHot(se) { return ['FL', 'FR', 'RL', 'RR'].some(k => !isBlank(se.hot[k])); }
+function dash(v) { return isBlank(v) ? '—' : v; }
 function activeEvent() { return data.events.find(e => e.id === data.activeId) || null; }
 function fmtDate(iso) {
   if (!iso) return '';
@@ -316,13 +321,16 @@ function renderTires(ev) {
           '<button type="button" class="dtl-compare-link" data-action="nav" data-key="review">Compare all →</button>' +
         '</div>' +
         '<div class="dtl-recent-scroll dtl-scroll">' +
-          recentSessions.map(s => '' +
-            '<div class="dtl-recent-card">' +
+          recentSessions.map(s => {
+            const pending = !hasHot(s);
+            const body = '' +
               '<div class="dtl-recent-card-top"><span class="dtl-recent-num">S' + s.number + '</span><span class="dtl-recent-cond">' + esc(s.condition) + '</span></div>' +
               '<div class="dtl-recent-type">' + esc(s.type) + '</div>' +
-              '<div class="dtl-recent-values"><b class="c">C</b> ' + ['FL', 'FR', 'RL', 'RR'].map(k => esc(s.cold[k])).join(' / ') + '<br><b class="h">H</b> ' + ['FL', 'FR', 'RL', 'RR'].map(k => esc(s.hot[k])).join(' / ') + '</div>' +
-            '</div>'
-          ).join('') +
+              '<div class="dtl-recent-values"><b class="c">C</b> ' + ['FL', 'FR', 'RL', 'RR'].map(k => esc(dash(s.cold[k]))).join(' / ') + '<br><b class="h">H</b> ' + (pending ? '<span class="dtl-recent-pending">Add hot ›</span>' : ['FL', 'FR', 'RL', 'RR'].map(k => esc(dash(s.hot[k]))).join(' / ')) + '</div>';
+            return pending
+              ? '<button type="button" class="dtl-recent-card dtl-recent-card--pending" data-action="edit-session" data-id="' + s.id + '" data-return="tires">' + body + '</button>'
+              : '<div class="dtl-recent-card">' + body + '</div>';
+          }).join('') +
         '</div>'
       : '') +
     '</div>';
@@ -465,7 +473,7 @@ function renderTyreTable(ev) {
           REVIEW_ROW_DEFS.map(r => '' +
             '<tr>' +
               '<th style="color:' + r.color + ';">' + r.label + '</th>' +
-              sessions.map(se => '<td>' + esc(r.get(se)) + '</td>').join('') +
+              sessions.map(se => '<td>' + esc(dash(r.get(se))) + '</td>').join('') +
             '</tr>'
           ).join('') +
         '</tbody>' +
@@ -607,10 +615,12 @@ function onNav(key) {
 }
 
 /* ============ HANDLERS: EDIT / CANCEL ============ */
-function onEditSession(id) {
+function onEditSession(id, returnTo) {
   const ev = activeEvent(); if (!ev) return;
   const se = ev.sessions.find(x => x.id === id); if (!se) return;
-  state.screen = 'tires'; state.editingSessionId = id; state.err = {};
+  // Coming from the pressures screen: keep the unsaved draft for the next session so it can be restored.
+  if (returnTo === 'tires' && !state.editingSessionId) state.heldTireDraft = state.tireDraft;
+  state.screen = 'tires'; state.editingSessionId = id; state.editReturn = returnTo || 'review'; state.err = {};
   state.tireDraft = { type: se.type, condition: se.condition, cold: { ...se.cold }, hot: { ...se.hot }, rimTemp: se.rimTemp };
   render();
 }
@@ -622,11 +632,17 @@ function onEditSetup(id) {
   state.setupDraft = { ...blankSetup(), ...fields };
   render();
 }
+function restoreTireDraft() {
+  const held = state.heldTireDraft;
+  state.heldTireDraft = null;
+  return held || blankTire(null);
+}
 function onCancelEdit() {
   const wasSetup = !!state.editingSetupId;
-  state.screen = 'review'; state.editingSessionId = null; state.editingSetupId = null; state.err = {};
+  state.screen = wasSetup ? 'review' : state.editReturn; state.editReturn = 'review';
+  state.editingSessionId = null; state.editingSetupId = null; state.err = {};
   state.reviewTab = wasSetup ? 'setups' : 'tires';
-  state.tireDraft = blankTire(null); state.setupDraft = blankSetup();
+  state.tireDraft = restoreTireDraft(); state.setupDraft = blankSetup();
   render();
 }
 
@@ -676,12 +692,18 @@ function onSaveTire() {
   const ev = activeEvent(); if (!ev) return;
   const t = state.tireDraft;
   const err = {};
+  // Cold pressures are required; hot pressures and rim temp can be added after the session.
+  // Hot is all-or-nothing so a half-filled grid is caught.
+  const hotStarted = hasHot(t);
   ['FL', 'FR', 'RL', 'RR'].forEach(c => {
-    if (!String(t.cold[c]).trim()) err['cold_' + c] = true;
-    if (!String(t.hot[c]).trim()) err['hot_' + c] = true;
+    if (isBlank(t.cold[c])) err['cold_' + c] = true;
+    if (hotStarted && isBlank(t.hot[c])) err['hot_' + c] = true;
   });
-  if (!String(t.rimTemp).trim()) err.rimTemp = true;
-  if (Object.keys(err).length) { state.err = err; render(); flashToast('Complete all 8 corners + rim temp', '⚠', 'err'); return; }
+  if (Object.keys(err).length) {
+    state.err = err; render();
+    flashToast(Object.keys(err).some(k => k.startsWith('cold_')) ? 'Complete all 4 cold corners' : 'Complete all 4 hot corners', '⚠', 'err');
+    return;
+  }
 
   if (state.editingSessionId) {
     const eid = state.editingSessionId;
@@ -692,7 +714,8 @@ function onSaveTire() {
       num = se.number;
     }
     persist();
-    state.editingSessionId = null; state.err = {}; state.screen = 'review'; state.reviewTab = 'tires'; state.tireDraft = blankTire(null);
+    state.screen = state.editReturn; state.editReturn = 'review';
+    state.editingSessionId = null; state.err = {}; state.reviewTab = 'tires'; state.tireDraft = restoreTireDraft();
     render();
     flashToast('Session ' + num + ' updated', '✓');
     return;
@@ -710,7 +733,7 @@ function onSaveTire() {
   persist();
   state.tireDraft = blankTire(state.tireDraft); state.err = {};
   render();
-  flashToast('Session ' + num + ' saved', '✓');
+  flashToast(hotStarted ? 'Session ' + num + ' saved' : 'Session ' + num + ' saved — add hot later', '✓');
 }
 
 function onSaveSetup() {
@@ -820,7 +843,7 @@ appRoot.addEventListener('click', (e) => {
     case 'cancel-edit': onCancelEdit(); break;
     case 'new-setup': onNewSetup(); break;
     case 'save-setup': onSaveSetup(); break;
-    case 'edit-session': onEditSession(btn.dataset.id); break;
+    case 'edit-session': onEditSession(btn.dataset.id, btn.dataset.return); break;
     case 'edit-setup': onEditSetup(btn.dataset.id); break;
     case 'delete-setup': onDeleteSetup(btn.dataset.id); break;
     case 'review-tab': state.reviewTab = btn.dataset.tab; render(); break;

@@ -175,6 +175,8 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.7);cursor:poi
 .dtl-recent-values{margin-top:9px;font-size:12px;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.5;}
 .dtl-recent-values b.c{color:#5BC0FF;font-weight:700;}
 .dtl-recent-values b.h{color:#FF7A4D;font-weight:700;}
+.dtl-recent-card--pending{font-family:inherit;color:inherit;text-align:left;cursor:pointer;border-style:dashed;border-color:#FF7A4D;}
+.dtl-recent-pending{color:#FF7A4D;font-weight:800;font-size:11px;letter-spacing:.04em;text-transform:uppercase;}
 
 /* ============ SETUP CARDS (form) ============ */
 .dtl-setup-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 15px;margin-bottom:14px;box-shadow:var(--card-shadow);}
